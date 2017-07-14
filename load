@@ -1,0 +1,31 @@
+#!/bin/sh
+
+rust_pid=$(pidof rust)
+if [ -z "$rust_pid" ]; then
+    /bin/echo -e "\e[31mRust needs to be open before you can inject...\e[0m"
+    exit 1
+fi
+
+
+#Credit: Aixxe @ aixxe.net
+if grep -q libMonoLoader.so /proc/$rust_pid/maps; then
+    /bin/echo -e "\e[33mMonoLoader is already injected... Aborting...\e[0m"
+    exit
+fi
+
+input="$(
+sudo gdb -n -q -batch \
+  -ex "attach $rust_pid" \
+  -ex "set \$dlopen = (void*(*)(char*, int)) dlopen" \
+  -ex "call \$dlopen(\"$(pwd)/libMonoLoader.so\", 1)" \
+  -ex "detach" \
+  -ex "quit"
+)"
+
+last_line="${input##*$'\n'}"
+
+if [ "$last_line" != "\$1 = (void *) 0x0" ]; then
+    /bin/echo -e "\e[32mSuccessfully injected!\e[0m"
+else
+    /bin/echo -e "\e[31mInjection failed, make sure you've compiled...\e[0m"
+fi
